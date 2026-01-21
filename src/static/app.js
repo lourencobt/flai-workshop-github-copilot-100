@@ -3,6 +3,93 @@ document.addEventListener("DOMContentLoaded", () => {
   const activitySelect = document.getElementById("activity");
   const signupForm = document.getElementById("signup-form");
   const messageDiv = document.getElementById("message");
+  const calendarGrid = document.getElementById("calendar-grid");
+  
+  // View switching
+  const navBtns = document.querySelectorAll(".nav-btn");
+  const viewContents = document.querySelectorAll(".view-content");
+  
+  navBtns.forEach(btn => {
+    btn.addEventListener("click", () => {
+      const viewType = btn.dataset.view;
+      
+      // Update active button
+      navBtns.forEach(b => b.classList.remove("active"));
+      btn.classList.add("active");
+      
+      // Update active view
+      viewContents.forEach(v => v.classList.remove("active"));
+      document.getElementById(`${viewType}-view`).classList.add("active");
+      
+      // Load calendar if switching to calendar view
+      if (viewType === "calendar") {
+        fetchCalendar();
+      }
+    });
+  });
+
+  // Function to parse schedule and extract day and time
+  function parseSchedule(schedule) {
+    const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+    const foundDays = [];
+    
+    days.forEach(day => {
+      if (schedule.includes(day) || schedule.includes(day + "s")) {
+        foundDays.push(day);
+      }
+    });
+    
+    // Extract time (look for pattern like "3:30 PM")
+    const timeMatch = schedule.match(/(\d{1,2}:\d{2}\s*(?:AM|PM))/i);
+    const time = timeMatch ? timeMatch[0] : "";
+    
+    return { days: foundDays, time };
+  }
+
+  // Function to create calendar view
+  async function fetchCalendar() {
+    try {
+      const response = await fetch("/activities");
+      const activities = await response.json();
+
+      const weekDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
+      
+      calendarGrid.innerHTML = `
+        <div class="calendar-header">
+          ${weekDays.map(day => `<div class="calendar-day-header">${day}</div>`).join('')}
+        </div>
+        <div class="calendar-body">
+          ${weekDays.map(day => `<div class="calendar-day" data-day="${day}"></div>`).join('')}
+        </div>
+      `;
+
+      // Populate activities into calendar
+      Object.entries(activities).forEach(([name, details]) => {
+        const { days, time } = parseSchedule(details.schedule);
+        
+        days.forEach(day => {
+          const dayColumn = calendarGrid.querySelector(`[data-day="${day}"]`);
+          if (dayColumn) {
+            const activityCard = document.createElement("div");
+            activityCard.className = "calendar-activity-card";
+            
+            const spotsLeft = details.max_participants - details.participants.length;
+            
+            activityCard.innerHTML = `
+              <div class="calendar-activity-name">${name}</div>
+              <div class="calendar-activity-time">${time}</div>
+              <div class="calendar-activity-spots">${spotsLeft}/${details.max_participants} spots</div>
+            `;
+            
+            dayColumn.appendChild(activityCard);
+          }
+        });
+      });
+    } catch (error) {
+      calendarGrid.innerHTML = "<p>Failed to load calendar. Please try again later.</p>";
+      console.error("Error fetching calendar:", error);
+    }
+  }
 
   // Function to fetch activities from API
   async function fetchActivities() {
@@ -12,6 +99,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
       // Clear loading message
       activitiesList.innerHTML = "";
+      activitySelect.innerHTML = '<option value="">-- Select an activity --</option>';
 
       // Populate activities list
       Object.entries(activities).forEach(([name, details]) => {
@@ -135,6 +223,12 @@ document.addEventListener("DOMContentLoaded", () => {
         
         // Refresh activities list
         fetchActivities();
+        
+        // Refresh calendar if visible
+        const calendarView = document.getElementById("calendar-view");
+        if (calendarView.classList.contains("active")) {
+          fetchCalendar();
+        }
 
         // Hide message after 5 seconds
         setTimeout(() => {
